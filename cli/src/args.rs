@@ -41,10 +41,22 @@ pub struct CompileCommand {
     /// Path to input Typst file
     pub input: PathBuf,
 
-    /// Path to output PDF file
+    /// Path to output PDF or PNG file
     pub output: Option<PathBuf>,
 
-    /// Opens the output file after compilation using the default PDF viewer
+    /// Create a PNG file rather than a PDF file
+    #[arg(long = "png")]
+    pub png: bool,
+
+    /// The pixels-per-point value (PNG-specific)
+    #[arg(long = "ppt", requires = "png")]
+    pub pixels_per_pt: Option<f32>,
+
+    /// Whether to use a transparent background (PNG-specific)
+    #[arg(long = "transparent", requires = "png")]
+    pub transparent: bool,
+
+    /// Opens the output file after compilation using the default PDF or PNG viewer
     #[arg(long = "open")]
     pub open: Option<Option<String>>,
 }

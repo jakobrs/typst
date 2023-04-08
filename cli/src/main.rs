@@ -36,6 +36,24 @@ pub fn typst_version() -> &'static str {
     env!("TYPST_VERSION")
 }
 
+#[derive(Clone, Copy)]
+enum OutputFormat {
+    PDF,
+    PNG {
+        pixels_per_pt: Option<f32>,
+        transparent: bool,
+    }
+}
+
+impl OutputFormat {
+    fn extension(&self) -> &'static str {
+        match self {
+            Self::PDF => "pdf",
+            Self::PNG { .. } => "png",
+        }
+    }
+}
+
 /// A summary of the input arguments relevant to compilation.
 struct CompileSettings {
     /// The path to the input file.
@@ -43,6 +61,9 @@ struct CompileSettings {
 
     /// The path to the output file.
     output: PathBuf,
+
+    /// The output format
+    output_format: OutputFormat,
 
     /// Whether to watch the input files for changes.
     watch: bool,
@@ -62,6 +83,7 @@ impl CompileSettings {
     pub fn new(
         input: PathBuf,
         output: Option<PathBuf>,
+        output_format: OutputFormat,
         watch: bool,
         root: Option<PathBuf>,
         font_paths: Vec<PathBuf>,
@@ -69,9 +91,17 @@ impl CompileSettings {
     ) -> Self {
         let output = match output {
             Some(path) => path,
-            None => input.with_extension("pdf"),
+            None => input.with_extension(output_format.extension()),
         };
-        Self { input, output, watch, root, font_paths, open }
+        Self {
+            input,
+            output,
+            output_format,
+            watch,
+            root,
+            font_paths,
+            open,
+        }
     }
 
     /// Create a new compile settings from the CLI arguments and a compile command.
@@ -80,12 +110,13 @@ impl CompileSettings {
     /// Panics if the command is not a compile or watch command.
     pub fn with_arguments(args: CliArguments) -> Self {
         let watch = matches!(args.command, Command::Watch(_));
-        let CompileCommand { input, output, open } = match args.command {
+        let CompileCommand { input, output, open, png, pixels_per_pt, transparent } = match args.command {
             Command::Compile(command) => command,
             Command::Watch(command) => command,
             _ => unreachable!(),
         };
-        Self::new(input, output, watch, args.root, args.font_paths, open)
+        let output_format = if png { OutputFormat::PNG { pixels_per_pt, transparent } } else { OutputFormat::PDF };
+        Self::new(input, output, output_format, watch, args.root, args.font_paths, open)
     }
 }
 
@@ -233,12 +264,39 @@ fn compile_once(world: &mut SystemWorld, command: &CompileSettings) -> StrResult
 
     match typst::compile(world) {
         // Export the PDF.
-        Ok(document) => {
-            let buffer = typst::export::pdf(&document);
-            fs::write(&command.output, buffer).map_err(|_| "failed to write PDF file")?;
-            status(command, Status::Success).unwrap();
-            Ok(false)
-        }
+        Ok(document) => match command.output_format {
+            OutputFormat::PDF => {
+                let buffer = typst::export::pdf(&document);
+                fs::write(&command.output, buffer)
+                    .map_err(|_| "failed to write PDF file")?;
+                status(command, Status::Success).unwrap();
+                Ok(false)
+            }
+            OutputFormat::PNG { pixels_per_pt, transparent } => {
+                let pixels_per_pt = pixels_per_pt.unwrap_or(10.);
+                let fill = if transparent {
+                    typst::geom::Color::Rgba(typst::geom::RgbaColor { r: 0, g: 0, b: 0, a: 0 })
+                } else {
+                    typst::geom::Color::WHITE
+                };
+
+                let pixmaps: Vec<_> = document
+                    .pages
+                    .iter()
+                    .map(|frame| typst::export::render(frame, pixels_per_pt, fill))
+                    .collect();
+
+                if let [frame] = &pixmaps[..] {
+                    frame
+                        .save_png(&command.output)
+                        .map_err(|_| "Failed to write PNG file")?;
+                    status(command, Status::Success).unwrap();
+                    Ok(false)
+                } else {
+                    Err("Multi-page PNG output has not been implemented".into())
+                }
+            }
+        },
 
         // Print diagnostics.
         Err(errors) => {
