@@ -24,7 +24,7 @@ comemo = "0.3"
 csv = "1"
 ecow = "0.1"
 hayagriva = "0.3"
-hypher = "0.1"
+hypher = { git = "https://github.com/jakobrs/hypher", branch = "no-nb-nn" }
 kurbo = "0.9"
 lipsum = "0.9"
 log = "0.4"

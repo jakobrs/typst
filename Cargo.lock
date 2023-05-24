@@ -769,8 +769,7 @@ checksum = "fed44880c466736ef9a5c5b5facefb5ed0785676d0c02d612db14e54f0d84286"
 [[package]]
 name = "hypher"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0cf92443ef10ecfc1b8b4b65a93e31d983f020a355699d83874b12a7c797ac3"
+source = "git+https://github.com/jakobrs/hypher?branch=no-nb-nn#2d283e1e75e5b2a85afbce652c390ecc6e20b61b"
 
 [[package]]
 name = "iai"
